@@ -32,23 +32,47 @@ Windows 可用 `copy .env.example .env` 复制配置。端口冲突时，在 `.e
 
 ## API 怎么接
 
-图片和视频分别配置 URL、API Key、模型名。可以来自同一家服务，也可以来自两家：
+**先选择接口预设，再分别填写 URL、API Key、模型名。** 图片和视频可以来自不同厂商；在相同接口格式内换模型，通常不需要修改源码。
+
+| 用途 | 预设 | 对应接口 |
+| --- | --- | --- |
+| 图片 | `openai` | OpenAI 官方 GPT Image 图片编辑 |
+| 图片 | `openai-edits` | 常见 OpenAI 风格图片编辑代理，保留旧版本格式 |
+| 图片 | `seedream` | 火山方舟 Seedream 4.x/5.x 图生图、多图参考 |
+| 视频 | `grok` | xAI 官方或 Grok 风格异步视频代理 |
+| 视频 | `seedance` | 火山方舟 Seedance 异步图生视频 |
+
+最小配置示例：
 
 ```dotenv
-CODEX_IMAGE_BASE_URL=https://your-image-provider.example/v1
-CODEX_IMAGE_API_KEY=your-image-api-key
-CODEX_IMAGE_MODEL=gpt-image-2
+IMAGE_PROVIDER=openai
+IMAGE_BASE_URL=https://api.openai.com/v1
+IMAGE_API_KEY=your-image-api-key
+IMAGE_MODEL=gpt-image-2
 
-GROK_VIDEO_BASE_URL=https://your-video-provider.example/v1
-GROK_VIDEO_API_KEY=your-video-api-key
-GROK_VIDEO_MODEL=grok-imagine-video-1.5
+VIDEO_PROVIDER=grok
+VIDEO_BASE_URL=https://api.x.ai/v1
+VIDEO_API_KEY=your-video-api-key
+VIDEO_MODEL=grok-imagine-video-1.5
 ```
 
-上面是占位值，不可直接调用。URL 填基础地址，通常含 `/v1`，不要填完整的 `/images/edits` 或 `/videos/generations` 地址。本机代理也可用 `http://127.0.0.1:端口/v1`。真实密钥只写入服务端 `.env` 或环境变量，不写进网页。
+密钥是占位值，需替换为自己的。使用代理时替换对应 URL；基础 URL 通常包括 `/v1`，方舟为 `/api/v3`，不要填写完整任务地址或图片 CDN 地址。本机代理也可用 `http://127.0.0.1:端口/v1`。配置后重启服务。
 
-**并不是任意 API 都能直接接。** 当前生图适配 OpenAI 风格的图片编辑接口；视频适配 Grok 风格的异步生成接口。具体请求和响应见 [API.md](API.md)。接口格式一致时，通常只需改上述配置；格式不一致时，需要修改 `server/public-providers.mjs` 适配器。
+方舟使用者可直接复制预设模板：
+
+```bash
+cp config-examples/seedream-seedance.env.example .env
+```
+
+再填写两个 API Key 和在自己账号中开通的模型/推理接入点 ID。也可自由组合 Seedream 图片与 Grok 视频等预设。旧的 `CODEX_IMAGE_*` / `GROK_VIDEO_*` 环境变量继续兼容，新的 `IMAGE_*` / `VIDEO_*` 优先。
+
+**预设适配接口格式，不保证任意模型具备相同能力。** 换装需要参考图编辑、多件搭配需要多图参考；视频需要图生视频，首尾帧模式还需要模型支持尾帧。不支持尾帧时可设 `VIDEO_LAST_FRAME=false`，首尾一致性则依赖模型生成。纯文生图、即梦网页端、其他第三方自定义协议不能只改模型名就接入。
+
+图片结果支持 Base64 或可信 CDN URL；视频提交、状态查询、结果下载由预设统一处理。额外 CDN 域名可用 `MEDIA_ALLOWED_HOSTS` 配置，跨域下载不会携带 API Key。图片参考数量和尺寸可选配，超过参考图上限会明确报错，不会静默丢弃单品。完整字段与兼容边界见 [API.md](API.md)。
 
 不配置视频 API 也可使用图片功能；不配置图片 API 也能上传照片与导入视频。自动整理白底、提取衣服、换装会调用生图接口；非白底穿搭生成旋转时可能先调用一次生图整理。
+
+预设依据 [OpenAI 图片编辑文档](https://developers.openai.com/api/reference/resources/images/methods/edit)、[xAI 视频文档](https://docs.x.ai/developers/model-capabilities/video/generation)及[火山方舟官方 SDK](https://github.com/volcengine/ark-runtime-python)实现。预设均有模拟协议测试；本次新增的厂商接入未调用收费真实生成。
 
 ## 数据保存与使用范围
 

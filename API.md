@@ -1,53 +1,104 @@
 # 生成服务适配
 
-所有 provider 请求由 Node.js 后端发出，浏览器不接收 API Key。修改配置后重启 `npm start`。
+在 `.env` 中分别选择图片/视频预设，填写对应基础 URL、API Key、模型名后重启。所有带凭据的请求都由 Node.js 后端发出。
 
-## 图片接口
+## 通用配置
 
-基础地址：`CODEX_IMAGE_BASE_URL`；密钥：`CODEX_IMAGE_API_KEY`；模型：`CODEX_IMAGE_MODEL`。
+| 配置 | 含义 |
+| --- | --- |
+| `IMAGE_PROVIDER` | `openai`（模板默认）、`openai-edits`、`seedream` |
+| `IMAGE_BASE_URL` / `IMAGE_API_KEY` / `IMAGE_MODEL` | 图片基础地址、密钥、模型或接入点 ID |
+| `VIDEO_PROVIDER` | `grok`（默认）、`seedance` |
+| `VIDEO_BASE_URL` / `VIDEO_API_KEY` / `VIDEO_MODEL` | 视频基础地址、密钥、模型或接入点 ID |
+| `IMAGE_SIZE` | 可选，按所选模型格式填写；Seedream 默认 `2K` |
+| `IMAGE_MAX_INPUTS` | 可选，参考图总数（含人物），1–17；默认 OpenAI 为 16、旧代理 17、Seedream 10；不得超过模型上限 |
+| `VIDEO_LAST_FRAME` | 默认发送相同首尾参考；不支持尾帧的模型设 `false` |
+| `MEDIA_ALLOWED_HOSTS` | 额外可信 CDN 域名，逗号分隔，可用 `*.your-cdn.example` |
 
-后端发送 `POST {base}/images/edits`：
+省略图片预设时沿用旧版 `openai-edits`；新模板显式选择 `openai`。旧 `CODEX_IMAGE_BASE_URL`、`CODEX_IMAGE_API_KEY`、`CODEX_IMAGE_MODEL` 和 `GROK_VIDEO_*` 作为后备，新字段优先。Seedream/Seedance 不设默认模型 ID，须填写自己账号可调用的 ID。类型拼写错误会报错，不会偷偷切到其他接口。
 
-- `Authorization: Bearer ...`
-- `multipart/form-data`，由运行时自动设置 boundary。
-- 字段：`model`、`prompt`、`n=1`、`response_format=b64_json`。
-- 一个或多个重复的 `image` 文件字段（JPEG）。换装包括模特参考和所选单品。
+## 图片预设
 
-预期响应：
+### `openai`：OpenAI 官方图片编辑
 
-```json
-{"data":[{"b64_json":"BASE64_IMAGE_BYTES"}]}
-```
+`POST {base}/images/edits`，Bearer 认证、multipart 文件。发送 `model`、`prompt`、`n=1` 及重复的 `image[]` 字段。GPT Image 默认返回 Base64，不发送旧式 `response_format`。可选 `size` 来自 `IMAGE_SIZE`。
 
-目前不接受只有远程图片 URL 的响应；服务若只返回 URL，需要自行修改适配器。结果在后端统一为白底竖图，再压缩为 WebP。最多 16 件单品；单张输入有大小/像素校验，总 JSON 请求上限 4 MB。
+### `openai-edits`：现有兼容代理
 
-## 视频接口
+同一路径、Bearer 认证；发送重复 `image` 文件字段和 `response_format=b64_json`，保留旧版接入协议。只支持聊天补全的所谓“OpenAI 兼容”服务不属于图片编辑兼容服务。
 
-基础地址：`GROK_VIDEO_BASE_URL`；密钥：`GROK_VIDEO_API_KEY`；模型：`GROK_VIDEO_MODEL`。
+### `seedream`：火山方舟 JSON 图生图
 
-提交：`POST {base}/videos/generations`，Bearer 认证，JSON 请求：
+`POST {base}/images/generations`，基础 URL 通常是 `https://ark.cn-beijing.volces.com/api/v3`。发送 JSON：
 
 ```json
 {
-  "model":"grok-imagine-video-1.5",
-  "duration":10,
-  "resolution":"720p",
-  "aspect_ratio":"3:4",
-  "image":{"url":"data:image/jpeg;base64,..."},
-  "last_frame":{"url":"data:image/jpeg;base64,..."},
-  "prompt":"由 public/rotation-prompt.js 读取的雕像旋转提示词"
+  "model":"your-enabled-seedream-model-id",
+  "prompt":"应用生成的换装/提取/白底整理提示词",
+  "image":["data:image/jpeg;base64,...","data:image/jpeg;base64,..."],
+  "size":"2K",
+  "response_format":"b64_json",
+  "stream":false,
+  "watermark":false
 }
 ```
 
-首尾参考相同。预期提交响应包含 `request_id`，格式为 `video_...`。
+仅有一张参考时 `image` 为字符串，多张时为数组。只请求单张输出，不启用组图。适配 Seedream 4.x/5.x 的图像编辑接口；不同模型图片数量上限不同，默认以 10 张参考图为保守上限，配置不能代替模型能力。
 
-轮询：`GET {base}/videos/{request_id}`。
+### 结果统一
+
+三种预设均读取 `data[0].b64_json`，或下载 `data[0].url`。Base64/图片下载大小有限制；结果后端归一化为白底竖版 WebP。输入像素和 4 MB 总 JSON 限制仍保留。
+
+## 视频预设
+
+预设把提交结果统一为 `{request_id}`，查询结果统一为 `pending` / `done` + `video.url` / `failed`。不限定上游编号必须以 `video_` 开头，支持官方 UUID 和方舟任务 ID。
+
+### `grok`：xAI 官方 / Grok 风格代理
+
+- 提交：`POST {base}/videos/generations`。
+- 查询：`GET {base}/videos/{request_id}`。
+- JSON 字段：`model`、`duration=10`、`resolution=720p`、`aspect_ratio=3:4`、`image.url`、`last_frame.url`、`prompt`。
+- `expired` / `cancelled` 与 `failed` 一样作为失败终态。
+- 官方视频 CDN `vidgen.x.ai` 可直接下载，不向 CDN 转发 Key；原代理同源 `/v1/media/videos/<文件名>` 仍带 Bearer 下载。
+
+### `seedance`：火山方舟图生视频
+
+- 提交：`POST {base}/contents/generations/tasks`，读取 `id`。
+- 查询：`GET {base}/contents/generations/tasks/{id}`。
+- 请求如下；`VIDEO_LAST_FRAME=false` 时不发送尾帧。
 
 ```json
-{"status":"done","video":{"url":"https://your-video-provider.example/v1/media/videos/example.mp4"}}
+{
+  "model":"your-enabled-seedance-model-id",
+  "content":[
+    {"type":"text","text":"共享的雕像旋转提示词"},
+    {"type":"image_url","image_url":{"url":"data:image/jpeg;base64,..."},"role":"first_frame"},
+    {"type":"image_url","image_url":{"url":"data:image/jpeg;base64,..."},"role":"last_frame"}
+  ],
+  "duration":10,
+  "resolution":"720p",
+  "ratio":"3:4",
+  "watermark":false
+}
 ```
 
-处理中返回非 `done`/`failed` 的状态；失败返回 `status=failed`。媒体 URL 必须与视频基础地址同源，路径符合 `/v1/media/videos/<文件名>`。下载由后端携带密钥转发，支持 HTTP Range。其他供应商的任务编号、状态字段、媒体路径可能不同，需要修改 `createProviders()`。
+`queued` / `running` 为处理中，`succeeded` 读取 `content.video_url`，`failed` / `cancelled` / `expired` 为失败。选择支持这些图生视频参数的模型；预设不保证所有 Seedance 版本支持尾帧或同样的分辨率。
+
+## CDN 与已有任务
+
+API URL 是提交生成任务的基础地址，不是 CDN 下载地址。同源媒体按适配器规则认证；跨源只允许 HTTPS、已知官方 CDN 或 `MEDIA_ALLOWED_HOSTS` 中的域名，不发送 API Key、不自动跟随重定向。签名下载链接保持完整。额外区域/代理 CDN 需显式补充可信域名。
+
+任务记录绑定当时的视频预设、URL、模型与尾帧模式；配置变化后，旧任务查询/下载会提示恢复原配置，避免把旧任务交给另一家服务。已经保存到浏览器的原视频不受影响。状态未知时不自动重复生成。
+
+## 官方参考与验证范围
+
+- [OpenAI 图片编辑](https://developers.openai.com/api/reference/resources/images/methods/edit)
+- [Seedream 图片生成 API](https://docs.volcengine.com/docs/ark/image-generation-api?lang=zh)
+- [Seedance 视频生成指南](https://docs.volcengine.com/docs/ark/video-generation-tutorial?lang=zh)
+- [火山方舟官方 SDK](https://github.com/volcengine/ark-runtime-python)
+- [xAI 视频生成](https://docs.x.ai/developers/model-capabilities/video/generation)
+
+新增适配采用模拟请求/响应验证，未调用真实收费生成。不承诺任意第三方“同名模型”与这些官方协议一致。
 
 ## 浏览器调用的应用接口
 

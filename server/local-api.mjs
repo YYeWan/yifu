@@ -4,17 +4,19 @@ import {pipeline} from 'node:stream/promises';
 import {createLocalStore,PublicError,localSnapshot} from './local-store.mjs';
 import {createProviders,decodeRotationImage,validateImageInput} from './public-providers.mjs';
 import {rotationPromptVersion} from './rotation-prompt.js';
+import {providerSettings} from './provider-settings.mjs';
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 async function body(req){
  if(req.body!==undefined){const s=typeof req.body==='string'?req.body:JSON.stringify(req.body);if(Buffer.byteLength(s)>4000000)throw new PublicError('素材总量太大，请减少单品数量',413);try{return JSON.parse(s);}catch{throw new PublicError('请求格式不正确');}}
  const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>4000000)throw new PublicError('素材总量太大，请减少单品数量',413);chunks.push(chunk);}try{return JSON.parse(Buffer.concat(chunks));}catch{throw new PublicError('请求格式不正确');}
 }
 export function createLocalHandler({env=process.env,store=createLocalStore(),providers=createProviders(env),background=p=>p.catch(()=>{}),owner=()=>'local'}={}){
- const configured=kind=>kind==='image'?Boolean(env.CODEX_IMAGE_BASE_URL&&env.CODEX_IMAGE_API_KEY):Boolean(env.GROK_VIDEO_BASE_URL&&env.GROK_VIDEO_API_KEY);
+ const settings=providerSettings(env);
+ const configured=kind=>Boolean(settings[kind].base&&settings[kind].key&&settings[kind].model);
  async function present(who,kind,j){
   if(!j)throw new PublicError('任务不存在',404,'NOT_FOUND');
   if(['queued','running','submitting'].includes(j.status)&&Date.now()-j.createdAt>330000)j={...j,status:'failed',error:'生成结果未确认，已停止自动重发；请联系站点作者。'};
-  const {upstreamId,mediaURL,chunks,...view}=j;
+  const {upstreamId,mediaURL,chunks,videoProviderIdentity,...view}=j;
   if(kind==='image'&&j.status==='completed'){
    view.imageUrl=await store.readImage(who,j.id,chunks);
    if(!view.imageUrl){view.status='failed';view.error='临时结果已过期，请使用已保存到浏览器的图片；不会自动重新生成。';}
@@ -29,7 +31,7 @@ export function createLocalHandler({env=process.env,store=createLocalStore(),pro
     const data=await providers.image(input,images);job.chunks=await store.saveImage(who,job.id,data);job.status='completed';job.background='white-v1';job.width=1086;job.height=1448;
    }else{
     const result=await providers.video('data:image/jpeg;base64,'+images.toString('base64'));
-    if(!/^video_[A-Za-z0-9_-]+$/.test(result.request_id||''))throw Error('No request ID');job.upstreamId=result.request_id;job.status='pending';
+    if(!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/.test(result.request_id||''))throw Error('No request ID');job.upstreamId=result.request_id;job.videoProviderIdentity=providers.videoIdentity;job.status='pending';
    }
   }catch(e){job.status=kind==='video'?'submission_uncertain':'failed';job.error=e instanceof PublicError?e.message:'生成状态未确认，未自动重发，请联系站点作者。';}
   try{await store.save(who,kind,job);}finally{if(kind==='image'||job.status!=='pending')await store.release(who,kind,job.id);}
@@ -41,7 +43,7 @@ export function createLocalHandler({env=process.env,store=createLocalStore(),pro
   try{
    if(pathname==='/api/experience'&&req.method==='GET')return send(200,localSnapshot());
    const who=owner(req,env);
-   if(pathname==='/api/image-config'&&req.method==='GET')return send(200,{configured:configured('image'),model:env.CODEX_IMAGE_MODEL||'gpt-image-2',videoConfigured:configured('video'),visionConfigured:false});
+   if(pathname==='/api/image-config'&&req.method==='GET')return send(200,{configured:configured('image'),model:settings.image.model,imageProvider:settings.image.type,maxImageInputs:settings.image.maxInputs,videoConfigured:configured('video'),videoProvider:settings.video.type,visionConfigured:false});
    if(pathname==='/api/image-jobs'&&req.method==='GET')return send(200,{jobs:[]});
    const route=/^\/api\/(image-jobs|rotation-jobs|rotation-media)(?:\/([a-f0-9-]+))?$/.exec(pathname);
    if(!route)throw new PublicError('接口不存在',404,'NOT_FOUND');
@@ -53,6 +55,7 @@ export function createLocalHandler({env=process.env,store=createLocalStore(),pro
     if(!String(req.headers['content-type']||'').startsWith('application/json'))throw new PublicError('请使用 JSON 提交素材',415,'INVALID_CONTENT_TYPE');
     const input=await body(req);if(!input||typeof input!=='object'||!UUID.test(input.requestId||''))throw new PublicError('请提供有效的任务编号');
     const images=kind==='image'?await validateImageInput(input):await decodeRotationImage(input.image);
+    if(kind==='image'&&images.length>settings.image.maxInputs)throw new PublicError(`当前图片预设最多接受 ${settings.image.maxInputs} 张参考图，请减少单品`,400,'IMAGE_REFERENCE_LIMIT');
     const safe=kind==='image'?{kind:input.kind,images:input.images,items:input.items,itemIds:input.itemIds,itemName:input.itemName}:{image:input.image};
     if(input.itemIds!==undefined&&(!Array.isArray(input.itemIds)||input.itemIds.length>16||input.itemIds.some(v=>typeof v!=='string'||v.length>100)))throw new PublicError('单品编号无效');
     const fingerprint=createHash('sha256').update(JSON.stringify(safe)).digest('hex');
@@ -65,13 +68,13 @@ export function createLocalHandler({env=process.env,store=createLocalStore(),pro
     let job=await store.get(who,kind,id);if(!job)throw new PublicError('任务不存在',404,'NOT_FOUND');
     if(route[1]==='rotation-media'){
      if(job.status!=='done'||!job.mediaURL)throw new PublicError('视频尚未完成',409,'VIDEO_PENDING');
-     const r=await providers.media(job.mediaURL,req.headers.range);
+     const r=await providers.media(job.mediaURL,req.headers.range,job.videoProviderIdentity);
      if(!r.ok)throw new PublicError('视频暂不可读取',502,'UPSTREAM_ERROR');
      res.statusCode=r.status;res.setHeader('Content-Type','video/mp4');for(const h of ['content-length','content-range','accept-ranges'])if(r.headers.has(h))res.setHeader(h,r.headers.get(h));
      await pipeline(Readable.fromWeb(r.body),res);return;
     }
     if(kind==='video'&&job.status==='pending'&&job.upstreamId){
-     const r=await providers.status(job.upstreamId);
+     const r=await providers.status(job.upstreamId,job.videoProviderIdentity);
      if(r.status==='done'&&r.video?.url){job={...job,status:'done',mediaURL:r.video.url};await store.save(who,kind,job);await store.release(who,kind,job.id);}
      else if(r.status==='failed'){job={...job,status:'failed',error:'视频生成失败，未自动重发。'};await store.save(who,kind,job);await store.release(who,kind,job.id);}
     }
