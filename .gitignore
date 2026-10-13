@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.local/
+qa/
+graphify-out/
+.DS_Store
+*.log
+*.pem
+*.key
+coverage/

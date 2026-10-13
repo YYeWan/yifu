@@ -1,0 +1,5 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {galleryType,galleryEntries,gallerySelection} from '../public/gallery-flow.js';
+const state={looks:[{id:'r1',sequence:'video-1'},{id:'f1'},{id:'r2',sequence:'video-2'},{id:'f2'}],models:[{id:'person'}],homeEntryId:'f2'};
+test('each gallery contains only its own type and preserves all saved outfits',()=>{const before=structuredClone(state);assert.deepEqual(galleryEntries(state,'rotation').map(x=>x.id),['r1','r2']);assert.deepEqual(galleryEntries(state,'flat').map(x=>x.id),['f1','f2']);assert.equal(galleryType(state),'flat');assert.deepEqual(state,before);});
+test('switching categories restores its selection, falling back safely when an outfit is gone',()=>{const saved={...state,homeViewType:'rotation',gallerySelections:{rotation:'r2',flat:'f1'}};assert.equal(gallerySelection(saved,'rotation').id,'r2');assert.equal(gallerySelection(saved,'flat').id,'f1');saved.gallerySelections.rotation='deleted';assert.equal(gallerySelection(saved,'rotation').id,'r1');assert.equal(gallerySelection({...saved,looks:[]},'flat'),undefined);});

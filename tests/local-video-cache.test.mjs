@@ -1,0 +1,11 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {prepareLocalVideo} from '../public/local-video-cache.js';
+class Video extends EventTarget{
+ constructor(){super();this.videoWidth=720;this.videoHeight=960;this.duration=10.041667;this.time=0;}
+ load(){if(this.src)queueMicrotask(()=>this.dispatchEvent(new Event('loadeddata')));}
+ set currentTime(t){this.time=t;queueMicrotask(()=>this.dispatchEvent(new Event('seeked')));}get currentTime(){return this.time;}
+ pause(){}removeAttribute(){this.src='';}
+}
+function setup(){const old=globalThis.document,video=new Video(),canvases=[];globalThis.document={createElement(type){if(type==='video')return video;const c={width:0,height:0,getContext(){return {fillRect(){},drawImage(){}};},toDataURL(){return 'data:image/webp;base64,YQ==';},toBlob(fn){fn(new Blob(['compressed-sheet'],{type:'image/webp'}));}};canvases.push(c);return c;}};return {video,canvases,restore(){globalThis.document=old;}};}
+test('a private video is processed once into bounded compact sheets, retaining its HD original Blob',async()=>{const x=setup();try{const file=new Blob(['original'],{type:'video/mp4'});let progress=0;const seq=await prepareLocalVideo(file,{onProgress:done=>progress=done});assert.equal(seq.videoBlob,file);assert.equal(seq.manifest.width,720);assert.equal(seq.manifest.height,960);assert.equal(seq.frameAtlas.count,144);assert.equal(seq.frameAtlas.coarse.count,24);assert.equal(seq.frameAtlas.detail.frames.length,144);assert.equal(seq.frameAtlas.detail.width,720);assert.equal(seq.frameAtlas.detail.height,960);assert.equal(seq.frameAtlas.sheets.length,6);assert.equal(progress,144);assert.equal(seq.frames,undefined);assert.ok(seq.frameAtlas.width<=256&&seq.frameAtlas.height<=384);assert.ok(seq.frameAtlas.sheets.every(s=>s.blob instanceof Blob));const copy=structuredClone(seq);assert.equal(await copy.videoBlob.text(),'original');assert.equal(await copy.frameAtlas.sheets[0].blob.text(),'compressed-sheet');assert.equal(x.video.src,'');}finally{x.restore();}});
+test('cancelling video preparation releases the source and never returns a partial saved sequence',async()=>{const x=setup();try{await assert.rejects(prepareLocalVideo(new Blob(['video']),{isCancelled:()=>true}),/取消/);assert.equal(x.video.src,'');}finally{x.restore();}});

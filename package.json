@@ -1,0 +1,19 @@
+{
+  "name": "yifu",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Digital wardrobe with AI try-on and cached 360-degree rotation",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check:release": "node scripts/check-release.mjs"
+  },
+  "dependencies": {
+    "sharp": "0.35.5"
+  }
+}

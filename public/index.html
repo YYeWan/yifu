@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f6f5ef"><title>数字衣柜 · 穿搭工作室</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app-startup" class="app-startup" role="status"><span class="spinner"></span><p id="app-startup-message">正在读取已保存的衣柜…</p><button id="retry-startup" class="pill soft" hidden>重新打开</button></div>
+<div class="app-shell" data-view="home" inert>
+<header class="app-header"><a class="logo" href="#home" aria-label="数字衣柜 穿搭首页"><b>数字衣柜</b></a><span class="header-page" id="header-page-label">穿搭画廊</span><div class="header-tools"><button class="icon-button" id="calendar-open" aria-label="穿搭日历" data-icon="calendar"></button><button class="icon-button" id="menu-open" aria-label="更多选项" data-icon="menu"></button></div></header>
+<aside class="experience-bar" aria-label="本地生成不限次数" data-state="loading">
+ <div class="experience-heading"><span class="experience-dot" aria-hidden="true"></span><strong>本地模式</strong><span>自由创作</span></div>
+ <div class="experience-meter"><span>图片生成</span><div><strong id="image-quota-remaining">—</strong><span>/ <span id="image-quota-total">500</span> 张</span></div><progress id="image-quota-progress" max="500" value="0" aria-label="图片生成额度"></progress></div>
+ <div class="experience-meter"><span>视频生成</span><div><strong id="video-quota-remaining">—</strong><span>/ <span id="video-quota-total">200</span> 个</span></div><progress id="video-quota-progress" max="200" value="0" aria-label="视频生成额度"></progress></div>
+ <p class="experience-personal" id="experience-personal" role="status">本地图片、视频生成不限次数</p>
+</aside>
+<main>
+<section id="home-page" class="page home-page" aria-label="今日穿搭">
+ <div class="viewer" id="viewer">
+  <div class="viewer-topline"><span id="look-position" class="look-position" aria-live="polite">0 / 0</span><div class="viewer-mode-switch" role="group" aria-label="穿搭类型"><button id="show-rotation-looks" class="icon-button gallery-mode" aria-label="360°旋转穿搭" title="360°旋转穿搭" aria-pressed="false"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M27 12a12 12 0 1 0 0 8M27 5v7h-7"/><text x="16" y="19.5" text-anchor="middle" font-size="9" font-family="Arial,sans-serif" fill="currentColor" stroke="none">360°</text></svg></button><button id="show-flat-looks" class="icon-button gallery-mode" aria-label="静态人物穿搭" title="静态人物穿搭" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="3"/><circle cx="12" cy="9" r="2.5"/><path d="M7.5 18v-1a4.5 4.5 0 0 1 9 0v1"/></svg></button></div><button id="open-look-picker" class="icon-button look-picker-toggle" aria-label="浏览已保存的穿搭" aria-haspopup="dialog" aria-expanded="false" aria-controls="look-picker" data-icon="wardrobe"></button></div>
+
+  <div class="stage" id="stage" tabindex="0" role="slider" aria-label="左右拖动旋转人物" aria-valuemin="0" aria-valuemax="360" aria-valuenow="0" aria-describedby="drag-hint">
+   <canvas id="canvas" width="560" height="834"></canvas><img id="look-photo" alt="当前穿搭" hidden>
+   <div class="loading" id="loading"><span class="spinner"></span><span id="load-text">正在载入穿搭…</span></div>
+  </div>
+  <button class="look-arrow previous icon-button" id="previous-look" aria-label="上一套穿搭" data-icon="left"></button><button class="look-arrow next icon-button" id="next-look" aria-label="下一套穿搭" data-icon="right"></button>
+  <div class="viewer-caption"><span id="drag-hint">左右滑动，看看每一面</span><span id="angle">000°</span></div>
+ </div>
+ <section class="look-sheet" id="look-sheet" aria-label="搭配详情">
+  <div class="look-intro"><span class="eyebrow">THE LOOKBOOK</span><h2>每一套，<br>都有新角度。</h2><p>收藏你的灵感，查看每一面的细节。</p></div>
+  <div class="look-meta"><span class="look-meta-label">YOUR LOOK</span><button class="text-button look-detail-toggle" id="expand-look" aria-label="查看搭配单品">单品详情 ↗</button><span class="look-type-badge" id="look-type-badge" hidden></span><input id="rotation" class="home-rotation" type="range" min="0" max="240" value="0" aria-label="旋转角度" title="拖动查看不同角度" disabled hidden><button id="look-date" class="date-button"><span data-icon="calendar"></span><span id="date-label"></span></button></div>
+  <div class="look-heading"><div><h1 id="look-title">学院格纹</h1><p id="look-subtitle">针织背心 × 格纹，今天的温柔配方</p></div><button class="icon-button favorite" id="favorite-look" aria-label="收藏这套穿搭" aria-pressed="false" data-icon="heart"></button></div>
+  <div id="look-items" class="look-items"></div>
+ <div class="look-actions"><button class="icon-button" id="save-as-person" aria-label="保存为人物素材" title="保存为人物素材" data-icon="photo"></button><button id="play" class="pill dark" disabled aria-pressed="false"><span id="play-icon">▷</span><span id="play-label">自动旋转</span></button><button id="photo-to-360" class="pill dark" hidden><span data-icon="rotate"></span>生成 360°</button><button class="icon-button" id="share-look" aria-label="保存当前穿搭图片" data-icon="share"></button><button class="icon-button" id="delete-look" aria-label="删除这套穿搭" data-icon="trash"></button><button class="icon-button" id="viewer-settings" aria-label="背景与旋转设置" data-icon="sliders"></button></div>
+  <button id="home-gallery-preview" class="home-gallery-preview" aria-label="打开全部穿搭"><span class="gallery-preview-heading"><span>你的画廊</span><span id="gallery-total"></span><span data-icon="right"></span></span><span id="gallery-preview-images" class="gallery-preview-images"></span></button>
+ </section>
+</section>
+<section id="closet-page" class="page scroll-page" aria-label="我的衣柜" hidden>
+ <div class="page-heading"><div><p class="eyebrow">THE COLLECTION</p><h1>你的衣柜<span class="heading-tag">COLLECTION</span></h1><p id="closet-count"></p></div><button class="icon-button outlined" id="add-item" aria-label="添加单品" data-icon="plus"></button></div>
+ <label class="search-box"><span data-icon="search"></span><input id="item-search" placeholder="搜索名称，找到想穿的那一件" type="search" aria-label="搜索单品"></label>
+ <div class="filter-row" role="group" aria-label="单品筛选"><div class="filter-chips"><button class="chip active" data-filter="all">全部单品</button><button class="chip" data-filter="models">人物</button><button class="chip" data-filter="favorites" aria-label="我的收藏"><span class="filter-label-wide">我的收藏 ♡</span><span class="filter-label-compact">收藏 ♡</span></button><button class="chip" data-filter="selected"><span class="filter-label-wide">已选搭配 </span><span class="filter-label-compact">已选 </span><span id="selection-count">0</span></button></div><div class="closet-tools" role="group" aria-label="单品管理"><button id="delete-clothes-mode" class="closet-tool" aria-label="删除衣服" title="删除衣服"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/></svg></button><button id="clear-all-checks" class="closet-tool" aria-label="一键取消勾选" title="一键取消勾选" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="5"/><path d="m9 9 6 6m0-6-6 6"/></svg></button></div></div>
+ <div id="delete-clothes-bar" class="closet-delete-bar" hidden><p>点选要删除的衣服，不影响搭配勾选</p><button id="delete-clothes-confirm" class="pill delete-solid" disabled>删除选中（0）</button></div>
+ <button id="undo-delete-clothes" class="text-button undo-delete" hidden>撤销上次删除</button>
+ <div id="closet-groups"></div>
+ <div class="selection-bar" id="selection-bar" hidden><span>已选 <b id="selected-total">0</b> 件</span><button class="text-button" id="clear-selection">清空已选</button><button class="pill dark" id="start-tryon">试穿搭配 <span data-icon="right"></span></button></div>
+</section>
+<section id="create-page" class="page scroll-page" aria-label="人物素材与创建" hidden>
+ <div class="page-heading"><div><p class="eyebrow">MAKE IT YOURS</p><h1>先选人，再搭衣服。</h1><p>人物照片放在这里，搭配成品会收进「穿搭」。</p></div></div>
+ <div class="create-entry-grid">
+  <button class="create-entry" id="choose-photo" aria-label="添加个人照片"><span class="path-number">01</span><span data-icon="photo"></span><strong>添加个人照片</strong><span>自己或参考模特，保留原图</span></button>
+  <button class="create-entry clothes-entry" id="add-clothes-entry" aria-label="添加衣服"><span class="path-number">02</span><span data-icon="hanger"></span><strong>添加衣服</strong><span>多张单品上传，或从照片提取</span></button>
+ </div>
+ <div class="section-label"><h2>人物素材 <span class="archive-count" id="archive-count">0</span></h2><button class="text-button" id="view-favorites">去衣柜搭配</button></div>
+ <p class="section-helper">点击人物，选择用来搭配，或提取身上的服饰。</p><div class="looks-grid" id="recent-looks"></div>
+</section>
+</main>
+<nav class="bottom-nav" aria-label="主导航"><button data-page="home" class="nav-item active" aria-label="穿搭首页" aria-current="page"><span data-icon="home"></span><span>穿搭</span></button><button data-page="create" class="nav-item camera-nav" aria-label="创建与记录"><span class="camera-circle" data-icon="plus"></span><span>创建</span></button><button data-page="closet" class="nav-item" aria-label="我的衣柜"><span data-icon="closet"></span><span>衣柜</span></button></nav>
+</div>
+<dialog id="look-picker" class="look-picker" aria-labelledby="look-picker-title"><div class="look-picker-heading"><h2 id="look-picker-title">穿搭画廊</h2><button id="close-look-picker" class="icon-button" aria-label="关闭穿搭列表" data-icon="close"></button></div><div id="look-picker-grid" class="look-picker-grid"></div></dialog>
+<dialog id="modal" aria-labelledby="modal-title"><div class="dialog-top"><h2 id="modal-title"></h2><button class="icon-button" id="close-modal" aria-label="关闭弹窗" data-icon="close"></button></div><div id="modal-body"></div></dialog>
+<dialog id="settings-modal" aria-labelledby="settings-title"><div class="dialog-top"><h2 id="settings-title">旋转设置</h2><button class="icon-button" id="close-settings" aria-label="关闭设置" data-icon="close"></button></div><div class="settings-body"><button class="text-button" id="reset">回到起点 ↺</button><p id="status" hidden></p></div></dialog>
+<div id="toast" class="toast" role="status" hidden></div>
+<input id="clothes-batch-input" type="file" accept="image/*" multiple hidden><input id="photo-input" type="file" accept="image/*" hidden><input id="video-input" type="file" accept="video/*" hidden><input id="item-input" type="file" accept="image/*" hidden>
+<script type="module" src="app.js"></script><script type="module" src="ui.js"></script><script type="module" src="experience.js"></script>
+</body></html>
